@@ -16,10 +16,6 @@ const int TEMPERATURE = 4;
 DHT HT(TEMPERATURE, DHT22);
 
 
-float humidity;
-float temperature;
-
-
 void setup() {
     Serial.begin(9600);
     HT.begin();
@@ -28,8 +24,8 @@ void setup() {
 
 
 void loop() {
-    humidity = HT.readHumidity();
-    temperature = HT.readTemperature(true);
+    float humidity = HT.readHumidity();
+    float temperature = HT.readTemperature(true);
     Serial.print("Temperature: ");
     Serial.print(temperature);
     Serial.print("F  Humidity: ");
