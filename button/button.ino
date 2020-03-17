@@ -1,11 +1,11 @@
-// LED wiring:
+// LED wiring (power to ground):
 // - Control-2 to slot 1
 // - Both ends of 330 ohm resister in slot 1 between Control-2 wire and LED
-// - LED positive in slot 1 (long end of LED)
-// - LED negative in slot 2 (short end of LED)
+// - LED positive in slot 1 (long end of the LED)
+// - LED negative in slot 2 (short end of the LED)
 // - slot 2 to ground
 //
-// BUTTON wiring:
+// BUTTON wiring (power to ground):
 // - 5V to slot 10
 // - 10K ohm resister from slot 10 to slot 11
 // - slot 11 to slot 12
