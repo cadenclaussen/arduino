@@ -1,17 +1,18 @@
 // LED wiring (power to ground):
-// - Control-2 to slot 1
-// - Both ends of 330 ohm resister in slot 1 between Control-2 wire and LED
-// - LED positive in slot 1 (long end of the LED)
-// - LED negative in slot 2 (short end of the LED)
-// - slot 2 to ground
+// - POWER/CONTROL: Arduino 2 to breadboard column 1
+// - Both ends of 330 ohm resister in breadboard column 1 between Arduino 2 connection and LED
+// - LED positive in breadboard column 1 (long end of the LED)
+// - LED negative in breadboard column 2 (short end of the LED)
+// - GROUND: breadboard column 2 to Arduino GND
 //
 // BUTTON wiring (power to ground):
-// - 5V to slot 10
-// - 10K ohm resister from slot 10 to slot 11
-// - slot 11 to slot 12
-// - button in slot 12 (positive) and slot 14 (negative)
-// - slot 14 to ground
-// - slot 11 to Control-3 (should be on the outer portion of the circuit)
+// - POWER: Arduino 5V to breadboard column 10
+// - 10K ohm resister from breadboard column 10 to breadboard column 11
+// - Wire from breadboard column 11 to breadboard column 12
+// - button in breadboard column 12 (positive) and breadboard column 14 (negative)
+// - GROUND: breadboard column 14 to Arduino GND
+// - CONTROL: breadboard column 11 to Arduino 3 (should be on the outer portion of the circuit)
+
 
 const int LED = 2;
 const int BUTTON = 3;
