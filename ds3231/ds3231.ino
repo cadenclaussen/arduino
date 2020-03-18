@@ -1,54 +1,63 @@
 #include "RTClib.h"
 
 
-RTC_DS3231 rtc;
+RTC_DS3231 ds3231;
 
 
-char daysOfTheWeek[7][12] = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
+String date;
+String time;
+int temperature;
 
 
-void setup () {
-
+void setup() {
     Serial.begin(9600);
+    delay(2000);
 
-    rtc.begin();
+    ds3231.begin();
 
-    if (rtc.lostPower()) {
+    if (ds3231.lostPower()) {
         // Use compilation date/time to reset
         Serial.println("RTC lost power.");
-        rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+        ds3231.adjust(DateTime(F(__DATE__), F(__TIME__)));
     }
 
     // Use an explicit date/time to reset
-    // rtc.adjust(DateTime(2014, 1, 21, 3, 0, 0));
+    // ds3231.adjust(DateTime(2014, 1, 21, 3, 0, 0));
+    ds3231.adjust(DateTime(F(__DATE__), F(__TIME__)));
 }
 
 
-void loop () {
-    DateTime now = rtc.now();
+void loop() {
+    getDateTime();
+    getTemperature();
 
-    Serial.print("Time: ");
-    Serial.print(daysOfTheWeek[now.dayOfTheWeek()]);
-    Serial.print("  ");
-    Serial.print(now.month(), DEC);
-    Serial.print('/');
-    Serial.print(now.day(), DEC);
-    Serial.print('/');
-    Serial.print(now.year(), DEC);
-    Serial.print("  ");
-    Serial.print(now.hour(), DEC);
-    Serial.print(':');
-    Serial.print(now.minute(), DEC);
-    Serial.print(':');
-    Serial.print(now.second(), DEC);
-    Serial.println();
+    Serial.println(date);
+    Serial.println(time);
+    Serial.println(temperature);
 
-    Serial.print("Temperature: ");
-    int tempC = rtc.getTemperature();
-    int tempF = (tempC * 1.8) + 32;
-    Serial.print(tempF);
-    Serial.println(" F");
+    delay(2000);
+}
 
-    Serial.println();
-    delay(3000);
+
+void getDateTime() {
+    DateTime now = ds3231.now();
+    char daysOfTheWeek[7][12] = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
+
+    // Determine date
+    String dow = daysOfTheWeek[now.dayOfTheWeek()];
+    String month = (String) now.month();
+    String day = (String) now.day();
+    String year = (String) now.year();
+    date = dow + " " + month + "/" + day + "/" + year;
+
+    // Determine time
+    String hour = (String) now.hour();
+    String minute = (String) now.minute();
+    String second = (String) now.second();
+    time = hour + ":" + minute + ":" + second;
+}
+
+
+void getTemperature() {
+    temperature = (ds3231.getTemperature() * 1.8) + 32;
 }

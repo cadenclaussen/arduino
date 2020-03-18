@@ -8,7 +8,7 @@
 #include "RTClib.h"
 
 
-// DT22: Temperature & Humidity Sensor
+// DHT22: Temperature & Humidity Sensor
 // NOTE: Must download both the DHT and Adafruit Sensor libraries
 #include <DHT.h>
 
@@ -17,30 +17,20 @@
 #include <math.h>
 
 
-// LCD wiring:
-// - Arduino GND to GND
-// - Arduino 5V to VCC
-// - Arduino SDA-20 to SDA (or shared SDA breadboard column)
-// - Arduino SCL-21 to SCL (or shared SCL breadboard column)
+// Common Cathode LED wiring:
+// - Place common cathode LED into the breadboard in slots 1 (blue), 2 (green), 3 (ground), and 4 (red)
+// - Wire Arduino PWM 2 to slot 1 (blue)
+// - Wire Arduino PWM 3 to slot 2 (green)
+// - Wire Arduino GND   to slot 3 (ground)
+// - Wire Arduino PWM 4 to slot 4 (red)
+// - Add 330 ohm resisters in slots 1, 2, and 4 between the wire from
+//   the Arduino PWM and the Common Cathode's pins
 //
 // DS3132 wiring
 // - Arduino GND to GND
 // - Arduino 5V to VDD
 // - Arduino SDA-20 to SDA (or shared SDA breadboard column)
 // - Arduino SCL-21 to SCL (or shared SCL breadboard column)
-//
-// DHT22 wiring (power to ground):
-// - 5V to breadboard column 1
-// - DHT22 in breadboard column 1, 2, and 3
-// - breadboard column 3 to ground
-// - breadboard column 2 to Arduino 4
-//
-// LED wiring (power to ground):
-// - POWER/CONTROL: Arduino 2 to breadboard column 1
-// - Both ends of 330 ohm resister in breadboard column 1 between Arduino 2 connection and LED
-// - LED positive in breadboard column 1 (long end of the LED)
-// - LED negative in breadboard column 2 (short end of the LED)
-// - GROUND: breadboard column 2 to Arduino GND
 //
 // BUTTON wiring (power to ground):
 // - POWER: Arduino 5V to breadboard column 10
@@ -49,22 +39,31 @@
 // - button in breadboard column 12 (positive) and breadboard column 14 (negative)
 // - GROUND: breadboard column 14 to Arduino GND
 // - CONTROL: breadboard column 11 to Arduino 3 (should be on the outer portion of the circuit)
+//
+// LCD wiring:
+// - Arduino GND to GND
+// - Arduino 5V to VCC
+// - Arduino SDA-20 to SDA (or shared SDA breadboard column)
+// - Arduino SCL-21 to SCL (or shared SCL breadboard column)
 
 
-const int LED = 2;
-const int BUTTON = 3;
-const int TEMPERATURE = 4;
+const int LED_BLUE = 2;
+const int LED_GREEN = 3;
+const int LED_RED = 4;
+
+const int BUTTON_RECORD_PAUSE = 5;
+const int BUTTON_STOP = 6;
 
 
 LiquidCrystal_I2C lcd = LiquidCrystal_I2C(0x27, 20, 4);
 RTC_DS3231 ds3231;
-DHT HT(TEMPERATURE, DHT22);
+DHT dht22(TEMPERATURE, DHT22);
 
 
-int humidity;
-int temperature;
 String date;
 String time;
+int temperature;
+int humidity;
 boolean timerStarted;
 
 
@@ -84,13 +83,15 @@ void setup() {
     }
 
     // Initialize the DHT22 temperature and humidity sensor
-    HT.begin();
+    dht22.begin();
 
     // Initialize the button
-    pinMode(BUTTON, INPUT);
+    pinMode(BUTTON_RECORD_PAUSE, INPUT);
 
     // Initialize the LED
-    pinMode(LED, OUTPUT);
+    pinMode(LED_BLUE, OUTPUT);
+    pinMode(LED_GREEN, OUTPUT);
+    pinMode(LED_RED, OUTPUT);
 
     // Inital delay
     delay(500);
@@ -107,7 +108,7 @@ void loop() {
 
 
 void getTimer() {
-    int buttonState = digitalRead(BUTTON);
+    int buttonState = digitalRead(BUTTON_RECORD_PAUSE);
     if (buttonState == LOW) {
         if (timerStarted == false) {
             digitalWrite(LED, HIGH);
@@ -136,19 +137,18 @@ void getDateTime() {
     String minute = (String) now.minute();
     String second = (String) now.second();
     time = hour + ":" + minute + ":" + second;
+}
 
-    Serial.println(date + " " + time);
+
+void getTemperature() {
+    int tempC = ds3231.getTemperature();
+    temperature = (tempC * 1.8) + 32;
 }
 
 
 void getTemperatureHumidity() {
-    humidity = (int) round(HT.readHumidity());
-    temperature = (int) round(HT.readTemperature(true));
-    Serial.print("Temperature: ");
-    Serial.print(temperature);
-    Serial.print("F  Humidity: ");
-    Serial.print(humidity);
-    Serial.println();
+    humidity = (int) round(dht22.readHumidity());
+    temperature = (int) round(dht22.readTemperature(true));
 }
 
 
