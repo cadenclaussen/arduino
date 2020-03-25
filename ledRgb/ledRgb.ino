@@ -22,18 +22,18 @@ void setup() {
 
 
 void loop() {
-    /* off(); */
-    /* delay(2000); */
-    /* on(); */
-    /* delay(2000); */
-    /* blue(); */
-    /* delay(2000); */
-    /* green(); */
-    /* delay(2000); */
-    /* red(); */
-    /* delay(2000); */
-    /* yellow(); */
-    /* delay(2000); */
+    off();
+    delay(2000);
+    on();
+    delay(2000);
+    blue();
+    delay(2000);
+    green();
+    delay(2000);
+    red();
+    delay(2000);
+    yellow();
+    delay(2000);
     someColor();
     delay(2000);
     magenta();
