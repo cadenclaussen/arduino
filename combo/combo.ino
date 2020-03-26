@@ -11,8 +11,9 @@ const int LED_RED_PIN = 4;
 
 const int BUTTON_RECORD_PAUSE_PIN = 5;
 const int BUTTON_STOP_PIN = 6;
+const int BUTTON_CANCEL_PIN = 7;
 
-const int DHT22_PIN = 7;
+const int DHT22_PIN = 8;
 
 
 LiquidCrystal_I2C lcd = LiquidCrystal_I2C(0x27, 20, 4);
@@ -72,11 +73,10 @@ void setup() {
     // Initialize the DHT22 temperature and humidity sensor
     dht22.begin();
 
-    // Initialize the record/pause button
-    pinMode(BUTTON_RECORD_PAUSE_PIN, INPUT);
-
-    // Initialize the stop button
-    pinMode(BUTTON_STOP_PIN, INPUT);
+    // Initialize the buttons
+    pinMode(BUTTON_RECORD_PAUSE_PIN, INPUT_PULLUP);
+    pinMode(BUTTON_STOP_PIN, INPUT_PULLUP);
+    pinMode(BUTTON_CANCEL_PIN, INPUT_PULLUP);
 
     // Initialize the LED
     pinMode(LED_BLUE_PIN, OUTPUT);
