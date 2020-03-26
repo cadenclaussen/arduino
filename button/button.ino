@@ -8,6 +8,8 @@
 
 
 const int BUTTON_PIN = 5;
+// const int BUTTON_PIN = 6;
+// const int BUTTON_PIN = 7;
 
 
 void setup() {

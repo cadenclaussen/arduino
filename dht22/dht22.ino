@@ -11,7 +11,7 @@
 // - Wire Arduino GND to slot 3 (-)
 
 
-const int DHT22_PIN = 7;
+const int DHT22_PIN = 8;
 
 
 DHT dht22(DHT22_PIN, DHT22);
