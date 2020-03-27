@@ -6,15 +6,16 @@
 
 
 // LED PWM Pins
-const int LED_BLUE_PIN = 2;
-const int LED_GREEN_PIN = 3;
-const int LED_RED_PIN = 4;
+const int BLUE_LED_PIN = 2;
+const int GREEN_LED_PIN = 3;
+const int RED_LED_PIN = 4;
 
-// LED PWM Pins
-const int BUTTON_RECORD_PAUSE_PIN = 5;
-const int BUTTON_STOP_PIN = 6;
-const int BUTTON_CANCEL_PIN = 7;
+// Button PWM Pins
+const int GREEN_BUTTON_PIN = 5;
+const int RED_BUTTON_PIN = 6;
+const int BLACK_BUTTON_PIN = 7;
 
+// Temperature and Humidity
 const int DHT22_PIN = 8;
 
 
@@ -23,25 +24,25 @@ RTC_DS3231 ds3231;
 DHT dht22(DHT22_PIN, DHT22);
 
 
-char dateTime[19];
+char dateTime[30];
 int temperature;
 int humidity;
 
+
 int state;
-const int INIT = 0;
+
 const int STOPPED = 1;
 const int RECORDING = 2;
 const int PAUSED = 3;
 
-int buttonRecordPauseLastState = HIGH;
+int priorButtonValue[8];
 
 char guesses[5];
 int cadenGuess;
 int shaneGuess;
 
 int loopDelay = 50;
-int lcdLoopDelay = 0;
-int stateLoopDelay = 0;
+int aggregateLoopDelay = 0;
 
 uint32_t elapsedMilliseconds;
 uint32_t startTime;
@@ -53,6 +54,12 @@ char elapsedTime[19];
 boolean newData = false;
 const byte numChars = 32;
 char receivedChars[numChars];
+
+
+boolean justStarted = false;
+boolean justStopped = false;
+boolean justCancelled = false;
+boolean justPaused = false;
 
 
 void setup() {
@@ -76,141 +83,196 @@ void setup() {
     dht22.begin();
 
     // Initialize the buttons
-    pinMode(BUTTON_RECORD_PAUSE_PIN, INPUT_PULLUP);
-    pinMode(BUTTON_STOP_PIN, INPUT_PULLUP);
-    pinMode(BUTTON_CANCEL_PIN, INPUT_PULLUP);
+    pinMode(GREEN_BUTTON_PIN, INPUT_PULLUP);
+    pinMode(RED_BUTTON_PIN, INPUT_PULLUP);
+    pinMode(BLACK_BUTTON_PIN, INPUT_PULLUP);
 
     // Initialize the LED
-    pinMode(LED_BLUE_PIN, OUTPUT);
-    pinMode(LED_GREEN_PIN, OUTPUT);
-    pinMode(LED_RED_PIN, OUTPUT);
+    pinMode(BLUE_LED_PIN, OUTPUT);
+    pinMode(GREEN_LED_PIN, OUTPUT);
+    pinMode(RED_LED_PIN, OUTPUT);
 
-    initializeState();
+    // Initialize the buttons to unpressed
+    priorButtonValue[BLUE_LED_PIN] = HIGH;
+    priorButtonValue[GREEN_LED_PIN] = HIGH;
+    priorButtonValue[RED_LED_PIN] = HIGH;
+
+    // Set the state to stopped
+    state = STOPPED;
+    ledRed();
 
     // Initial delay
     delay(500);
-
-    Serial.print("SC> ");
-
-    state = INIT;
-    /* startRecording(); */
 }
 
 
 void loop() {
 
 
-    if (state == INIT) {
 
-        Serial.print("SC> ");
-        while (Serial.available() < 2) {
+
+    switch (state) {
+
+
+    case STOPPED:
+        if (buttonPressed(GREEN_BUTTON_PIN)) {
+            startRecording();
         }
-        shaneGuess = Serial.parseInt();
-        Serial.println(shaneGuess);
 
-
-        Serial.print("CC> ");
-        while (Serial.available() < 2) {
+        if (justStopped) {
+            if (aggregateLoopDelay % 1000 < 500) {
+                ledRed();
+            } else {
+                ledOff();
+            }
+        } else if (justCancelled) {
+            if (aggregateLoopDelay % 1000 < 500) {
+                ledBlue();
+            } else {
+                ledOff();
+            }
+        } else {
+            ledRed();
         }
-        cadenGuess = Serial.parseInt();
-        Serial.println(cadenGuess);
+        break;
 
-        sprintf(guesses, "%02d/%02d", shaneGuess, cadenGuess);
-        Serial.println(guesses);
 
-        state = STOPPED;
+    case RECORDING:
 
-    } else {
-        getButtons();
+        // Transition if required
+        if (buttonPressed(GREEN_BUTTON_PIN)) {
+            pauseRecording();
+        } else if (buttonPressed(BLACK_BUTTON_PIN)) {
+            cancelRecording();
+        } else if (buttonPressed(RED_BUTTON_PIN)) {
+            summarizeRecording();
+        } else {
+
+            // Still in the recording state...
+            if (aggregateLoopDelay % 1000 == 0) {
+                getElapsedTime();
+            }
+
+            if (justStarted) {
+                if (aggregateLoopDelay % 1000 < 500) {
+                    ledGreen();
+                } else {
+                    ledOff();
+                }
+            } else {
+                ledGreen();
+            }
+        }
+
+        break;
+
+
+    case PAUSED:
+
+        // Transition if required
+        if (buttonPressed(GREEN_BUTTON_PIN)) {
+            continueRecording();
+        } else if (buttonPressed(BLACK_BUTTON_PIN)) {
+            continueRecording();
+            cancelRecording();
+        } else if (buttonPressed(RED_BUTTON_PIN)) {
+            continueRecording();
+            summarizeRecording();
+        } else {
+            // Still in the paused state...
+
+            // This code effectively blinks the LED between off and
+            // yellow, being in the off position for the first half of
+            // a second and then on/yellow for the second half of the
+            // second, continuously.
+            if (justPaused) {
+                if (aggregateLoopDelay % 1000 < 500) {
+                    ledYellow();
+                } else {
+                    ledOff();
+                }
+            } else {
+                ledYellow();
+            }
+        }
+        break;
     }
 
 
-    getDateTime();
-    delay(loopDelay);
-
-
-    lcdLoopDelay += loopDelay;
-    if (lcdLoopDelay > 1000) {
-        lcdLoopDelay = 0;
-        getElapsedTime();
-        getTemperatureHumidity();
+    // Get the time ever second and the temperature and
+    // humdity every 5 seconds
+    if (aggregateLoopDelay % 1000 == 0) {
+        getDateTime();
+        if (aggregateLoopDelay % 5000 == 0) {
+            getTemperatureHumidity();
+        }
         updateLcd();
     }
 
 
-    if (state == PAUSED) {
-        stateLoopDelay += loopDelay;
-        if (stateLoopDelay < 250) {
-            ledOff();
-        } else if (stateLoopDelay < 500) {
-            ledYellow();
-        } else {
-            stateLoopDelay = 0;
-        }
-    } else {
-        stateLoopDelay = 0;
+    delay(loopDelay);
+    aggregateLoopDelay += loopDelay;
+    if (aggregateLoopDelay > 5000) {
+        aggregateLoopDelay = 0;
+        justStarted = false;
+        justStopped = false;
+        justCancelled = false;
+        justPaused = false;
     }
 }
 
 
-void getButtons() {
-    int buttonRecordPause = digitalRead(BUTTON_RECORD_PAUSE_PIN);
-    if (buttonRecordPause == LOW) {
-        if (buttonRecordPauseLastState == HIGH) {
-            if (state == STOPPED) {
-                startRecording();
-            } else if (state == RECORDING) {
-                pauseRecording();
-            } else if (state == PAUSED) {
-                continueRecording();
-            }
-            buttonRecordPauseLastState = LOW;
-        }
-    } else {
-        buttonRecordPauseLastState = HIGH;
+boolean buttonPressed(int buttonPin) {
+    int buttonValue = digitalRead(buttonPin);
+
+    // status unchanged:
+    // - was previously up, still up, or
+    // - was previously down, and still down
+    if (buttonValue == priorButtonValue[buttonPin]) {
+        return false;
     }
 
-    int buttonStop = digitalRead(BUTTON_STOP_PIN);
-    if (buttonStop == LOW) {
-        if (state == PAUSED) {
-            continueRecording();
-        } else if (state == RECORDING) {
-            stopRecording();
-        }
+    // was just released (back in the up position)
+    if (buttonValue == HIGH) {
+        priorButtonValue[buttonPin] = HIGH;
+        return false;
     }
-}
 
-
-void initializeState() {
-    /* Serial.println("On, and ready to go"); */
-    state = STOPPED;
-    ledRed();
+    // was just pressed down
+    priorButtonValue[buttonPin] = LOW;
+    return true;
 }
 
 
 void startRecording() {
-    /* Serial.println("Recording started..."); */
+    Serial.println("Recording started...");
     state = RECORDING;
+    ledGreen();
     startTime = millis();
     aggregatePauseTime = 0;
     pauseStartTime = 0;
-    ledGreen();
+    justStarted = true;
+    aggregateLoopDelay = 0;
 }
 
 
 void pauseRecording() {
     Serial.println("Recording paused...");
-    pauseStartTime = millis();
     state = PAUSED;
+    pauseStartTime = millis();
+    justPaused = true;
+    aggregateLoopDelay = 0;
 }
 
 
 void continueRecording() {
     Serial.println("Recording continued...");
     state = RECORDING;
+    ledGreen();
     uint32_t pauseEndTime = millis();
     aggregatePauseTime += pauseEndTime - pauseStartTime;
-    ledGreen();
+    justStarted = true;
+    aggregateLoopDelay = 0;
 }
 
 
@@ -218,14 +280,17 @@ void cancelRecording() {
     Serial.println("Recording cancelled...");
     state = STOPPED;
     ledRed();
+    justCancelled = true;
+    aggregateLoopDelay = 0;
 }
 
 
-void stopRecording() {
-    Serial.println("Recording stopped...");
-    getElapsedTime();
+void summarizeRecording() {
+    Serial.println("Recording summarization...");
     state = STOPPED;
     ledRed();
+    justStopped = true;
+    aggregateLoopDelay = 0;
 }
 
 
@@ -254,13 +319,9 @@ void getTemperatureHumidity() {
 
 
 void getElapsedTime() {
-    if (state != RECORDING) {
-        return;
-    }
-
     elapsedMilliseconds = millis();
-    int seconds = ((elapsedMilliseconds - startTime - aggregatePauseTime) / 1000) % 60;
     int minutes = ((elapsedMilliseconds - startTime - aggregatePauseTime) / 1000) / 60;
+    int seconds = ((elapsedMilliseconds - startTime - aggregatePauseTime) / 1000) % 60;
     sprintf(elapsedTime, "%02d:%02d", minutes, seconds);
 
     /* Serial.println(elapsedTime); */
@@ -281,11 +342,6 @@ void updateLcd() {
     lcd.setCursor(4, 1);
     lcd.print(humidity);
 
-    if (state > INIT) {
-        lcd.setCursor(7, 1);
-        lcd.print(guesses);
-    }
-
     if (state > STOPPED) {
         lcd.setCursor(0, 2);
         lcd.print(elapsedTime);
@@ -294,42 +350,42 @@ void updateLcd() {
 
 
 void ledOff() {
-    digitalWrite(LED_RED_PIN, LOW);
-    digitalWrite(LED_GREEN_PIN, LOW);
-    digitalWrite(LED_BLUE_PIN, LOW);
+    digitalWrite(RED_LED_PIN, LOW);
+    digitalWrite(GREEN_LED_PIN, LOW);
+    digitalWrite(BLUE_LED_PIN, LOW);
 }
 
 
 void ledOn() {
-    digitalWrite(LED_RED_PIN, HIGH);
-    digitalWrite(LED_GREEN_PIN, HIGH);
-    digitalWrite(LED_BLUE_PIN, HIGH);
+    digitalWrite(RED_LED_PIN, HIGH);
+    digitalWrite(GREEN_LED_PIN, HIGH);
+    digitalWrite(BLUE_LED_PIN, HIGH);
 }
 
 
 void ledRed() {
-    digitalWrite(LED_RED_PIN, HIGH);
-    digitalWrite(LED_GREEN_PIN, LOW);
-    digitalWrite(LED_BLUE_PIN, LOW);
+    digitalWrite(RED_LED_PIN, HIGH);
+    digitalWrite(GREEN_LED_PIN, LOW);
+    digitalWrite(BLUE_LED_PIN, LOW);
 }
 
 
 void ledBlue() {
-    digitalWrite(LED_RED_PIN, LOW);
-    digitalWrite(LED_GREEN_PIN, LOW);
-    digitalWrite(LED_BLUE_PIN, HIGH);
+    digitalWrite(RED_LED_PIN, LOW);
+    digitalWrite(GREEN_LED_PIN, LOW);
+    digitalWrite(BLUE_LED_PIN, HIGH);
 }
 
 
 void ledGreen() {
-    digitalWrite(LED_RED_PIN, LOW);
-    digitalWrite(LED_GREEN_PIN, HIGH);
-    digitalWrite(LED_BLUE_PIN, LOW);
+    digitalWrite(RED_LED_PIN, LOW);
+    digitalWrite(GREEN_LED_PIN, HIGH);
+    digitalWrite(BLUE_LED_PIN, LOW);
 }
 
 
 void ledYellow() {
-    analogWrite(LED_RED_PIN, HIGH);
-    analogWrite(LED_GREEN_PIN, HIGH);
-    digitalWrite(LED_BLUE_PIN, LOW);
+    digitalWrite(RED_LED_PIN, HIGH);
+    digitalWrite(GREEN_LED_PIN, HIGH);
+    digitalWrite(BLUE_LED_PIN, LOW);
 }

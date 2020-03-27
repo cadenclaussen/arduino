@@ -4,8 +4,7 @@
 RTC_DS3231 ds3231;
 
 
-String date;
-String time;
+char dateTime[19];
 int temperature;
 
 
@@ -31,8 +30,7 @@ void loop() {
     getDateTime();
     getTemperature();
 
-    Serial.println(date);
-    Serial.println(time);
+    Serial.println(dateTime);
     Serial.println(temperature);
 
     delay(2000);
@@ -41,20 +39,14 @@ void loop() {
 
 void getDateTime() {
     DateTime now = ds3231.now();
-    char daysOfTheWeek[7][12] = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
-
-    // Determine date
-    String dow = daysOfTheWeek[now.dayOfTheWeek()];
-    String month = (String) now.month();
-    String day = (String) now.day();
-    String year = (String) now.year();
-    date = dow + " " + month + "/" + day + "/" + year;
-
-    // Determine time
-    String hour = (String) now.hour();
-    String minute = (String) now.minute();
-    String second = (String) now.second();
-    time = hour + ":" + minute + ":" + second;
+    char daysOfTheWeek[7][12] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
+    int hour = now.hour();
+    char ampm = 'a';
+    if (hour > 12) {
+        hour -= 12;
+        ampm = 'p';
+    }
+    sprintf(dateTime, "%s %02d/%02d %02d:%02d:%02d%c", daysOfTheWeek[now.dayOfTheWeek()], now.month(), now.day(), hour, now.minute(), now.second(), ampm);
 }
 
 
