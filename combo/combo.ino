@@ -5,10 +5,12 @@
 #include <math.h>
 
 
+// LED PWM Pins
 const int LED_BLUE_PIN = 2;
 const int LED_GREEN_PIN = 3;
 const int LED_RED_PIN = 4;
 
+// LED PWM Pins
 const int BUTTON_RECORD_PAUSE_PIN = 5;
 const int BUTTON_STOP_PIN = 6;
 const int BUTTON_CANCEL_PIN = 7;
