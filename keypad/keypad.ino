@@ -8,8 +8,8 @@ char keys[ROWS][COLS] = {{ '1', '2', '3', 'A' },
                          { '4', '5', '6', 'B' },
                          { '7', '8', '9', 'C' },
                          { '*', '0', '#', 'D' }};
-byte rowPins[ROWS] = { 38, 39, 40, 41 }; // connect to the row pinouts of the keypad
-byte colPins[COLS] = { 42, 43, 44, 45 }; // connect to the column pinouts of the keypad
+byte rowPins[ROWS] = { 38, 39, 40, 41 };
+byte colPins[COLS] = { 42, 43, 44, 45 };
 
 
 Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
@@ -22,7 +22,7 @@ void setup(){
 
 void loop(){
     char key = keypad.getKey();
-    if (key){
+    if (key) {
         Serial.println(key);
     }
 }
