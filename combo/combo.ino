@@ -6,6 +6,19 @@
 #include <Keypad.h>
 
 
+// Board requirements
+//
+// Total:               4 PWM Pins, 15 Digital Pins
+//
+// LED:                 3 Pin(s) (ideally PWM)
+// DHT22 Temp/Humidity: 1 Pin(s) (PWM)
+// Buttons:             3 Pin(s)
+// Keypad:              8 Pin(s)
+// MicroSD:             4 Pin(s)
+// LCD: SCL/SCA
+// DS3231 Date/Time: SCL/SCA
+
+
 // LED
 const int BLUE_LED_PIN = 2;
 const int GREEN_LED_PIN = 3;
@@ -42,27 +55,29 @@ byte colPins[COLS] = { 42, 43, 44, 45 };
 Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 
 
+// States of the application
 int state;
 const int STOPPED = 1;
 const int RECORDING = 2;
 const int PAUSED = 3;
 
 
-char guesses[5];
 int cadenGuess;
 int shaneGuess;
+char guesses[5];
 
 
 int loopDelay = 50;
 int aggregateLoopDelay = 0;
 
 
-uint32_t elapsedMilliseconds;
 uint32_t startTime;
 uint32_t endTime;
-uint32_t aggregatePauseTime;
-uint32_t pauseStartTime;
+uint32_t elapsedMilliseconds;
 char elapsedTime[19];
+
+uint32_t pauseStartTime;
+uint32_t aggregatePauseTime;
 
 
 boolean justStarted = false;
@@ -108,7 +123,7 @@ void setup() {
 
     // Set the state to stopped
     state = STOPPED;
-    led(HIGH, LOW, LOW);
+    red();
 
     // Initial delay
     delay(500);
@@ -122,24 +137,24 @@ void loop() {
 
 
     case STOPPED:
-        if (buttonPressed(GREEN_BUTTON_PIN)) {
+        if (buttonJustPressed(GREEN_BUTTON_PIN)) {
             startRecording();
         }
 
         if (justStopped) {
             if (aggregateLoopDelay % 1000 < 500) {
-                led(HIGH, LOW, LOW); // red
+                red(); // red
             } else {
-                led(LOW, LOW, LOW); // off
+                off(); // off
             }
         } else if (justCancelled) {
             if (aggregateLoopDelay % 1000 < 500) {
-                led(LOW, LOW, HIGH); // blue
+                blue(); // blue
             } else {
-                led(LOW, LOW, LOW); // off
+                off(); // off
             }
         } else {
-            led(HIGH, LOW, LOW); // red
+            red(); // red
         }
         break;
 
@@ -147,11 +162,11 @@ void loop() {
     case RECORDING:
 
         // Transition if required
-        if (buttonPressed(GREEN_BUTTON_PIN)) {
+        if (buttonJustPressed(GREEN_BUTTON_PIN)) {
             pauseRecording();
-        } else if (buttonPressed(BLACK_BUTTON_PIN)) {
+        } else if (buttonJustPressed(BLACK_BUTTON_PIN)) {
             cancelRecording();
-        } else if (buttonPressed(RED_BUTTON_PIN)) {
+        } else if (buttonJustPressed(RED_BUTTON_PIN)) {
             summarizeRecording();
         } else {
 
@@ -162,12 +177,12 @@ void loop() {
 
             if (justStarted) {
                 if (aggregateLoopDelay % 1000 < 500) {
-                    led(LOW, HIGH, LOW); // green
+                    green();
                 } else {
-                    led(LOW, LOW, LOW); // off
+                    off();
                 }
             } else {
-                led(LOW, HIGH, LOW); // green
+                green();
             }
         }
 
@@ -177,12 +192,12 @@ void loop() {
     case PAUSED:
 
         // Transition if required
-        if (buttonPressed(GREEN_BUTTON_PIN)) {
+        if (buttonJustPressed(GREEN_BUTTON_PIN)) {
             continueRecording();
-        } else if (buttonPressed(BLACK_BUTTON_PIN)) {
+        } else if (buttonJustPressed(BLACK_BUTTON_PIN)) {
             continueRecording();
             cancelRecording();
-        } else if (buttonPressed(RED_BUTTON_PIN)) {
+        } else if (buttonJustPressed(RED_BUTTON_PIN)) {
             continueRecording();
             summarizeRecording();
         } else {
@@ -194,12 +209,12 @@ void loop() {
             // second, continuously.
             if (justPaused) {
                 if (aggregateLoopDelay % 1000 < 500) {
-                    led(HIGH, HIGH, LOW); // yellow
+                    yellow();
                 } else {
-                    led(LOW, LOW, LOW); // off
+                    off();
                 }
             } else {
-                led(HIGH, HIGH, LOW); // yellow
+                yellow();
             }
         }
         break;
@@ -229,25 +244,33 @@ void loop() {
 }
 
 
-boolean buttonPressed(int buttonPin) {
+// Did the button @ buttonPin just get pressed in this loop?
+boolean buttonJustPressed(int buttonPin) {
+
+    // Read the current value of the button
     int buttonValue = digitalRead(buttonPin);
 
-    // status unchanged:
-    // - was previously up, still up, or
-    // - was previously down, and still down
-    if (buttonValue == priorButtonValue[buttonPin]) {
+    // The button was previously up, and is still up, it is unchanged
+    if (buttonValue == HIGH && priorButtonValue[buttonPin] == HIGH) {
         return false;
     }
 
-    // was just released (back in the up position)
-    if (buttonValue == HIGH) {
+    // The button was previously down, and is still down, it is unchanged
+    if (buttonValue == LOW && priorButtonValue[buttonPin] == LOW) {
+        return false;
+    }
+
+    // The button was just released (back in the up position)
+    if (buttonValue == HIGH && priorButtonValue[buttonPin] == LOW) {
         priorButtonValue[buttonPin] = HIGH;
         return false;
     }
 
-    // was just pressed down
-    priorButtonValue[buttonPin] = LOW;
-    return true;
+    // The button was just pressed (back in the down position)
+    if (buttonValue == LOW && priorButtonValue[buttonPin] == HIGH) {
+        priorButtonValue[buttonPin] = LOW;
+        return true;
+    }
 }
 
 
@@ -292,6 +315,7 @@ void cancelRecording() {
 void summarizeRecording() {
     Serial.println("Recording summarization...");
     state = STOPPED;
+    // Write information to the MicroSD Cardg
     justStopped = true;
     aggregateLoopDelay = 0;
 }
@@ -317,10 +341,49 @@ void updateLcd() {
 }
 
 
+void off() {
+    led(LOW, LOW, LOW);
+}
+
+
+void red() {
+    led(HIGH, LOW, LOW);
+}
+
+
+void green() {
+    led(LOW, HIGH, LOW);
+}
+
+
+void blue() {
+    led(LOW, LOW, HIGH);
+}
+
+
+void yellow() {
+    led(HIGH, HIGH, LOW);
+}
+
+
 void led(int red, int green, int blue) {
-    digitalWrite(RED_LED_PIN, red);
-    digitalWrite(GREEN_LED_PIN, green);
-    digitalWrite(BLUE_LED_PIN, blue);
+    if (red == LOW || red == HIGH) {
+        digitalWrite(RED_LED_PIN, red);
+    } else {
+        analogWrite(RED_LED_PIN, red);
+    }
+
+    if (green == LOW || green == HIGH) {
+        digitalWrite(GREEN_LED_PIN, green);
+    } else {
+        analogWrite(GREEN_LED_PIN, green);
+    }
+
+    if (blue == LOW || blue == HIGH) {
+        digitalWrite(BLUE_LED_PIN, blue);
+    } else {
+        analogWrite(BLUE_LED_PIN, blue);
+    }
 }
 
 
