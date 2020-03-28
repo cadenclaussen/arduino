@@ -62,6 +62,16 @@ const int RECORDING = 2;
 const int PAUSED = 3;
 
 
+// State transitions of the application
+int recentTransition;
+const int NONE = 0;
+const int START = 1;
+const int PAUSE = 2;
+const int RESUME = 3;
+const int CANCEL = 4;
+const int FINISH = 5;
+
+
 int cadenGuess;
 int shaneGuess;
 char guesses[5];
@@ -78,12 +88,6 @@ char elapsedTime[19];
 
 uint32_t pauseStartTime;
 uint32_t aggregatePauseTime;
-
-
-boolean justStarted = false;
-boolean justStopped = false;
-boolean justCancelled = false;
-boolean justPaused = false;
 
 
 void setup() {
@@ -137,52 +141,58 @@ void loop() {
 
 
     case STOPPED:
-        if (buttonJustPressed(GREEN_BUTTON_PIN)) {
+
+        switch (getSelectedButton()) {
+
+        case GREEN_BUTTON_PIN:
             startRecording();
+            break;
+
+        default:
+            switch (recentTransition) {
+            case NONE:
+                red();
+                break;
+            case FINISH:
+                toggleLed(HIGH, LOW, LOW);
+                break;
+            case CANCEL:
+                toggleLed(LOW, LOW, HIGH);
+                break;
+            }
         }
 
-        if (justStopped) {
-            if (aggregateLoopDelay % 1000 < 500) {
-                red(); // red
-            } else {
-                off(); // off
-            }
-        } else if (justCancelled) {
-            if (aggregateLoopDelay % 1000 < 500) {
-                blue(); // blue
-            } else {
-                off(); // off
-            }
-        } else {
-            red(); // red
-        }
         break;
-
 
     case RECORDING:
 
-        // Transition if required
-        if (buttonJustPressed(GREEN_BUTTON_PIN)) {
-            pauseRecording();
-        } else if (buttonJustPressed(BLACK_BUTTON_PIN)) {
-            cancelRecording();
-        } else if (buttonJustPressed(RED_BUTTON_PIN)) {
-            summarizeRecording();
-        } else {
+        switch (getSelectedButton()) {
 
-            // Still in the recording state...
+        case GREEN_BUTTON_PIN:
+            pauseRecording();
+            break;
+
+        case BLACK_BUTTON_PIN:
+            cancelRecording();
+            break;
+
+        case RED_BUTTON_PIN:
+            finishRecording();
+            break;
+
+        default:
             if (aggregateLoopDelay % 1000 == 0) {
                 getElapsedTime();
             }
 
-            if (justStarted) {
-                if (aggregateLoopDelay % 1000 < 500) {
-                    green();
-                } else {
-                    off();
-                }
-            } else {
+            switch (recentTransition) {
+            case NONE:
                 green();
+                break;
+            case START:
+            case RESUME:
+                toggleLed(LOW, HIGH, LOW);
+                break;
             }
         }
 
@@ -191,30 +201,30 @@ void loop() {
 
     case PAUSED:
 
-        // Transition if required
-        if (buttonJustPressed(GREEN_BUTTON_PIN)) {
-            continueRecording();
-        } else if (buttonJustPressed(BLACK_BUTTON_PIN)) {
-            continueRecording();
-            cancelRecording();
-        } else if (buttonJustPressed(RED_BUTTON_PIN)) {
-            continueRecording();
-            summarizeRecording();
-        } else {
-            // Still in the paused state...
+        switch (getSelectedButton()) {
 
-            // This code effectively blinks the LED between off and
-            // yellow, being in the off position for the first half of
-            // a second and then on/yellow for the second half of the
-            // second, continuously.
-            if (justPaused) {
-                if (aggregateLoopDelay % 1000 < 500) {
-                    yellow();
-                } else {
-                    off();
-                }
-            } else {
+        case GREEN_BUTTON_PIN:
+            resumeRecording();
+            break;
+
+        case BLACK_BUTTON_PIN:
+            resumeRecording();
+            cancelRecording();
+            break;
+
+        case RED_BUTTON_PIN:
+            resumeRecording();
+            finishRecording();
+            break;
+
+        default:
+            switch (recentTransition) {
+            case NONE:
                 yellow();
+                break;
+            case PAUSE:
+                toggleLed(HIGH, HIGH, LOW);
+                break;
             }
         }
         break;
@@ -236,16 +246,96 @@ void loop() {
     aggregateLoopDelay += loopDelay;
     if (aggregateLoopDelay > 5000) {
         aggregateLoopDelay = 0;
-        justStarted = false;
-        justStopped = false;
-        justCancelled = false;
-        justPaused = false;
+        recentTransition = NONE;
     }
 }
 
 
-// Did the button @ buttonPin just get pressed in this loop?
-boolean buttonJustPressed(int buttonPin) {
+void startRecording() {
+    Serial.println("Recording started...");
+    recentTransition = START;
+    state = RECORDING;
+    startTime = millis();
+    aggregatePauseTime = 0;
+    pauseStartTime = 0;
+    aggregateLoopDelay = 0;
+}
+
+
+void pauseRecording() {
+    Serial.println("Recording paused...");
+    recentTransition = PAUSE;
+    state = PAUSED;
+    pauseStartTime = millis();
+    aggregateLoopDelay = 0;
+}
+
+
+void resumeRecording() {
+    Serial.println("Recording resumed...");
+    recentTransition = RESUME;
+    state = RECORDING;
+    uint32_t pauseEndTime = millis();
+    aggregatePauseTime += pauseEndTime - pauseStartTime;
+    aggregateLoopDelay = 0;
+}
+
+
+void cancelRecording() {
+    Serial.println("Recording cancelled...");
+    recentTransition = CANCEL;
+    state = STOPPED;
+    aggregateLoopDelay = 0;
+}
+
+
+void finishRecording() {
+    Serial.println("Recording summarization...");
+    recentTransition = FINISH;
+    state = STOPPED;
+    // Write information to the MicroSD Card here ...
+    aggregateLoopDelay = 0;
+}
+
+
+void updateLcd() {
+    lcd.clear();
+
+    lcd.setCursor(0, 0);
+    lcd.print(dateTime);
+
+    lcd.setCursor(0, 1);
+    lcd.print(temperature);
+    lcd.print((char) 223);
+
+    lcd.setCursor(4, 1);
+    lcd.print(humidity);
+
+    if (state > STOPPED) {
+        lcd.setCursor(0, 2);
+        lcd.print(elapsedTime);
+    }
+}
+
+
+int getSelectedButton() {
+    if (wasButtonJustPushed(RED_BUTTON_PIN)) {
+        return RED_BUTTON_PIN;
+    }
+
+    if (wasButtonJustPushed(GREEN_BUTTON_PIN)) {
+        return GREEN_BUTTON_PIN;
+    }
+
+    if (wasButtonJustPushed(BLACK_BUTTON_PIN)) {
+        return BLACK_BUTTON_PIN;
+    }
+
+    return 0;
+}
+
+
+boolean wasButtonJustPushed(int buttonPin) {
 
     // Read the current value of the button
     int buttonValue = digitalRead(buttonPin);
@@ -274,70 +364,13 @@ boolean buttonJustPressed(int buttonPin) {
 }
 
 
-void startRecording() {
-    Serial.println("Recording started...");
-    state = RECORDING;
-    startTime = millis();
-    aggregatePauseTime = 0;
-    pauseStartTime = 0;
-    justStarted = true;
-    aggregateLoopDelay = 0;
-}
-
-
-void pauseRecording() {
-    Serial.println("Recording paused...");
-    state = PAUSED;
-    pauseStartTime = millis();
-    justPaused = true;
-    aggregateLoopDelay = 0;
-}
-
-
-void continueRecording() {
-    Serial.println("Recording continued...");
-    state = RECORDING;
-    uint32_t pauseEndTime = millis();
-    aggregatePauseTime += pauseEndTime - pauseStartTime;
-    justStarted = true;
-    aggregateLoopDelay = 0;
-}
-
-
-void cancelRecording() {
-    Serial.println("Recording cancelled...");
-    state = STOPPED;
-    justCancelled = true;
-    aggregateLoopDelay = 0;
-}
-
-
-void summarizeRecording() {
-    Serial.println("Recording summarization...");
-    state = STOPPED;
-    // Write information to the MicroSD Cardg
-    justStopped = true;
-    aggregateLoopDelay = 0;
-}
-
-
-void updateLcd() {
-    lcd.clear();
-
-    lcd.setCursor(0, 0);
-    lcd.print(dateTime);
-
-    lcd.setCursor(0, 1);
-    lcd.print(temperature);
-    lcd.print((char) 223);
-
-    lcd.setCursor(4, 1);
-    lcd.print(humidity);
-
-    if (state > STOPPED) {
-        lcd.setCursor(0, 2);
-        lcd.print(elapsedTime);
+void toggleLed(int red, int green, int blue) {
+    if (aggregateLoopDelay % 1000 < 500) {
+        led(red, green, blue);
+        return;
     }
+
+    off();
 }
 
 
