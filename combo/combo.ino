@@ -33,15 +33,15 @@ int priorButtonValue[8];
 // Temperature and Humidity Sensor
 const int DHT22_PIN = 8;
 DHT dht22(DHT22_PIN, DHT22);
-int temperature;
-int humidity;
+int temperatureLcd;
+int humidityLcd;
 
 // LCD
 LiquidCrystal_I2C lcd = LiquidCrystal_I2C(0x27, 20, 4);
 
 // Date/Time Sensor
 RTC_DS3231 ds3231;
-char dateTime[30];
+char dateTimeLcd[21];
 
 // Keypad
 const byte ROWS = 4;
@@ -56,35 +56,44 @@ Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 
 
 // States of the application
-int state;
 const int STOPPED = 1;
 const int RECORDING = 2;
 const int PAUSED = 3;
+int state = STOPPED;
 
 
 // State transitions of the application
-int recentTransition;
 const int NONE = 0;
 const int START = 1;
 const int PAUSE = 2;
 const int RESUME = 3;
 const int CANCEL = 4;
 const int FINISH = 5;
+int recentTransition = NONE;
 
+
+char keypadEntry[3];
+char keypadEntryIndex = 0;
+
+const int INIT = 0;
+const int CADEN = 1;
+const int DAD = 2;
+const int COMPLETE = 3;
+int guessState = INIT;
 
 int cadenGuess;
-int shaneGuess;
-char guesses[5];
+int dadGuess;
+char guessLcd[21];
 
 
-int loopDelay = 50;
+int loopDelay = 10;
 int aggregateLoopDelay = 0;
 
 
 uint32_t startTime;
 uint32_t endTime;
 uint32_t elapsedMilliseconds;
-char elapsedTime[19];
+char elapsedTimeLcd[21];
 
 uint32_t pauseStartTime;
 uint32_t aggregatePauseTime;
@@ -125,10 +134,6 @@ void setup() {
     priorButtonValue[GREEN_LED_PIN] = HIGH;
     priorButtonValue[RED_LED_PIN] = HIGH;
 
-    // Set the state to stopped
-    state = STOPPED;
-    red();
-
     // Initial delay
     delay(500);
 }
@@ -145,7 +150,7 @@ void loop() {
         switch (getSelectedButton()) {
 
         case GREEN_BUTTON_PIN:
-            startRecording();
+            start();
             break;
 
         default:
@@ -164,27 +169,30 @@ void loop() {
 
         break;
 
+
     case RECORDING:
 
         switch (getSelectedButton()) {
 
         case GREEN_BUTTON_PIN:
-            pauseRecording();
+            pause();
             break;
 
         case BLACK_BUTTON_PIN:
-            cancelRecording();
+            cancel();
             break;
 
         case RED_BUTTON_PIN:
-            finishRecording();
+            finish();
             break;
 
         default:
-            if (aggregateLoopDelay % 1000 == 0) {
+            // Every second, get the elapsed recording time
+            if (seconds(1)) {
                 getElapsedTime();
             }
 
+            // Set the LED
             switch (recentTransition) {
             case NONE:
                 green();
@@ -194,6 +202,11 @@ void loop() {
                 toggleLed(LOW, HIGH, LOW);
                 break;
             }
+
+            if (guessState > INIT) {
+                getGuesses();
+            }
+            break;
         }
 
         break;
@@ -204,20 +217,21 @@ void loop() {
         switch (getSelectedButton()) {
 
         case GREEN_BUTTON_PIN:
-            resumeRecording();
+            resume();
             break;
 
         case BLACK_BUTTON_PIN:
-            resumeRecording();
-            cancelRecording();
+            resume();
+            cancel();
             break;
 
         case RED_BUTTON_PIN:
-            resumeRecording();
-            finishRecording();
+            resume();
+            finish();
             break;
 
         default:
+            // Set the LED
             switch (recentTransition) {
             case NONE:
                 yellow();
@@ -226,16 +240,22 @@ void loop() {
                 toggleLed(HIGH, HIGH, LOW);
                 break;
             }
+
+            if (guessState > INIT) {
+                getGuesses();
+            }
+            break;
         }
+
         break;
     }
 
 
-    // Get the time ever second and the temperature and
-    // humdity every 5 seconds
-    if (aggregateLoopDelay % 1000 == 0) {
+    // Every 1 second, get the date/time, and update the LCD
+    // Every 5 seconds, get the date/time, temp/humdity, and update the LCD
+    if (seconds(1)) {
         getDateTime();
-        if (aggregateLoopDelay % 5000 == 0) {
+        if (seconds(5)) {
             getTemperatureHumidity();
         }
         updateLcd();
@@ -251,19 +271,106 @@ void loop() {
 }
 
 
-void startRecording() {
-    Serial.println("Recording started...");
+void resetGuess() {
+    guessState = CADEN;
+    keypadEntryIndex = 0;
+    sprintf(keypadEntry, "  ");
+}
+
+
+void getGuesses() {
+
+    char ch = keypad.getKey();
+    if (ch) {
+        switch (ch) {
+
+        case '#':
+            if (keypadEntryIndex < 2) {
+                Serial.println("ERROR: Finish entering guess");
+                break;
+            }
+
+            if (guessState == CADEN) {
+                cadenGuess = atoi(keypadEntry);
+                guessState = DAD;
+            } else {
+                dadGuess = atoi(keypadEntry);
+                guessState = COMPLETE;
+            }
+
+            keypadEntryIndex = 0;
+            sprintf(keypadEntry, "  ");
+            Serial.print("cadenGuess: ");
+            Serial.print(cadenGuess);
+            Serial.print("  dadGuess: ");
+            Serial.print(dadGuess);
+            Serial.print("  keypadEntry: [");
+            Serial.print(keypadEntry);
+            Serial.println("]");
+            break;
+
+        case '*':
+            if (keypadEntryIndex > 0) {
+                Serial.print("keypadEntry before: [");
+                Serial.print(keypadEntry);
+                Serial.print("]");
+                keypadEntryIndex--;
+                keypadEntry[keypadEntryIndex] = ' ';
+                Serial.print("  keypadEntry after: [");
+                Serial.print(keypadEntry);
+                Serial.println("]");
+            } else {
+                Serial.println("ERROR: Nothing to delete");
+            }
+            break;
+
+        case 'A':
+            resetGuess();
+            break;
+
+        default:
+            if (keypadEntryIndex < 2) {
+                keypadEntry[keypadEntryIndex] = ch;
+                keypadEntryIndex++;
+                Serial.print("keypadEntry: [");
+                Serial.print(keypadEntry);
+                Serial.println("]");
+            } else {
+                Serial.println("ERROR: Entry ignored, use * or #");
+            }
+            break;
+        }
+    }
+
+
+    switch (guessState) {
+
+    case CADEN:
+        sprintf(guessLcd, "Caden: [%-2s]        ", keypadEntry);
+        break;
+    case DAD:
+        sprintf(guessLcd, "Caden: %2d Dad: [%-2s]", cadenGuess, keypadEntry);
+        break;
+    case COMPLETE:
+        sprintf(guessLcd, "Caden: %2d Dad: %02d  ", cadenGuess, dadGuess);
+    }
+}
+
+
+void start() {
+    Serial.println("start...");
     recentTransition = START;
     state = RECORDING;
     startTime = millis();
     aggregatePauseTime = 0;
     pauseStartTime = 0;
     aggregateLoopDelay = 0;
+    guessState = CADEN;
 }
 
 
-void pauseRecording() {
-    Serial.println("Recording paused...");
+void pause() {
+    Serial.println("pause...");
     recentTransition = PAUSE;
     state = PAUSED;
     pauseStartTime = millis();
@@ -271,8 +378,8 @@ void pauseRecording() {
 }
 
 
-void resumeRecording() {
-    Serial.println("Recording resumed...");
+void resume() {
+    Serial.println("resumed...");
     recentTransition = RESUME;
     state = RECORDING;
     uint32_t pauseEndTime = millis();
@@ -281,40 +388,22 @@ void resumeRecording() {
 }
 
 
-void cancelRecording() {
-    Serial.println("Recording cancelled...");
+void cancel() {
+    Serial.println("cancel...");
     recentTransition = CANCEL;
     state = STOPPED;
     aggregateLoopDelay = 0;
+    resetGuess();
 }
 
 
-void finishRecording() {
-    Serial.println("Recording summarization...");
+void finish() {
+    Serial.println("finish...");
     recentTransition = FINISH;
     state = STOPPED;
     // Write information to the MicroSD Card here ...
     aggregateLoopDelay = 0;
-}
-
-
-void updateLcd() {
-    lcd.clear();
-
-    lcd.setCursor(0, 0);
-    lcd.print(dateTime);
-
-    lcd.setCursor(0, 1);
-    lcd.print(temperature);
-    lcd.print((char) 223);
-
-    lcd.setCursor(4, 1);
-    lcd.print(humidity);
-
-    if (state > STOPPED) {
-        lcd.setCursor(0, 2);
-        lcd.print(elapsedTime);
-    }
+    resetGuess();
 }
 
 
@@ -365,7 +454,7 @@ boolean wasButtonJustPushed(int buttonPin) {
 
 
 void toggleLed(int red, int green, int blue) {
-    if (aggregateLoopDelay % 1000 < 500) {
+    if (aggregateLoopDelay % 500 < 250) {
         led(red, green, blue);
         return;
     }
@@ -395,7 +484,7 @@ void blue() {
 
 
 void yellow() {
-    led(HIGH, HIGH, LOW);
+    led(254, 254, LOW);
 }
 
 
@@ -429,13 +518,13 @@ void getDateTime() {
         hour -= 12;
         ampm = 'p';
     }
-    sprintf(dateTime, "%s %02d/%02d %02d:%02d:%02d%c", daysOfTheWeek[now.dayOfTheWeek()], now.month(), now.day(), hour, now.minute(), now.second(), ampm);
+    sprintf(dateTimeLcd, "%s %02d/%02d %02d:%02d:%02d%c", daysOfTheWeek[now.dayOfTheWeek()], now.month(), now.day(), hour, now.minute(), now.second(), ampm);
 }
 
 
 void getTemperatureHumidity() {
-    temperature = (int) round(dht22.readTemperature(true));
-    humidity = (int) round(dht22.readHumidity());
+    temperatureLcd = (int) round(dht22.readTemperature(true));
+    humidityLcd = (int) round(dht22.readHumidity());
 }
 
 
@@ -443,5 +532,42 @@ void getElapsedTime() {
     elapsedMilliseconds = millis();
     int minutes = ((elapsedMilliseconds - startTime - aggregatePauseTime) / 1000) / 60;
     int seconds = ((elapsedMilliseconds - startTime - aggregatePauseTime) / 1000) % 60;
-    sprintf(elapsedTime, "%02d:%02d", minutes, seconds);
+    sprintf(elapsedTimeLcd, "%02d:%02d", minutes, seconds);
+}
+
+
+boolean seconds(int n) {
+    if (aggregateLoopDelay % (n * 1000) == 0) {
+        return true;
+    }
+    return false;
+}
+
+
+void updateLcd() {
+    /* lcd.clear(); */
+
+    lcd.setCursor(0, 0);
+    lcd.print(dateTimeLcd);
+
+    lcd.setCursor(0, 1);
+    lcd.print(temperatureLcd);
+    lcd.print((char) 223);
+
+    lcd.setCursor(4, 1);
+    lcd.print(humidityLcd);
+
+    if (state == STOPPED) {
+        lcd.setCursor(0, 2);
+        lcd.print("                  ");
+
+        lcd.setCursor(0, 3);
+        lcd.print("                  ");
+    } else {
+        lcd.setCursor(0, 2);
+        lcd.print(guessLcd);
+
+        lcd.setCursor(0, 3);
+        lcd.print(elapsedTimeLcd);
+    }
 }
